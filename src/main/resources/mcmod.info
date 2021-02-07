@@ -1,0 +1,15 @@
+[
+{
+  "modid": "speedrunnervshunter",
+  "name": "Speedrunner Vs Hunter v1",
+  "description": "Speed runner Vs Hunter, now as a Forge mod.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["Tfarecmin"],
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
