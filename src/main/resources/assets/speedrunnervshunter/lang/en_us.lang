@@ -1,5 +1,0 @@
-commands.speedrunnervshunter.usage=Use /speedrunnervshunter <subcommand>
-commands.speedrunnervshunter.speedrunner.success=%s is now the Speedrunner
-commands.speedrunnervshunter.speedrunner.failed=Could not make %s a Speedrunner
-text.speedrunnervshunter.trophy_get=The Speedrunner has gotten a Trophy!
-text.speedrunnervshunter.speedrunner_win=The Speedrunner has gotten all the Trophies!

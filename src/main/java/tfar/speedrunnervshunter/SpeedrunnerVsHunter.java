@@ -1,47 +1,54 @@
 package tfar.speedrunnervshunter;
 
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.init.Blocks;
-import net.minecraft.init.Items;
+import net.minecraft.block.Blocks;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.play.server.SPacketSpawnPosition;
+import net.minecraft.item.Items;
+import net.minecraft.nbt.CompoundNBT;
+
+import net.minecraft.network.play.server.SSpawnPositionPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.util.text.TranslationTextComponent;
 import net.minecraft.world.World;
-import net.minecraft.world.WorldServer;
-import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.gen.Heightmap;
+import net.minecraft.world.server.ServerWorld;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import tfar.speedrunnervshunter.commands.MainCommand;
 
 import java.util.*;
 
-@Mod(modid = SpeedrunnerVsHunter.MODID, name = SpeedrunnerVsHunter.NAME, version = SpeedrunnerVsHunter.VERSION, acceptableRemoteVersions = "*")
+@Mod(SpeedrunnerVsHunter.MODID)
 @Mod.EventBusSubscriber
 public class SpeedrunnerVsHunter {
     public static final String MODID = "speedrunnervshunter";
-    public static final String NAME = "Speedrunner vs Hunter";
-    public static final String VERSION = "1.0";
 
-    public static EntityPlayerMP speedrunner;
+    public static ServerPlayerEntity speedrunner;
     public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
 
-
-    @Mod.EventHandler
-    public void onServerStart(FMLServerStartingEvent e) {
-        e.registerServerCommand(new MainCommand());
+    public SpeedrunnerVsHunter() {
+        IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
+        MinecraftForge.EVENT_BUS.addListener(this::onServerStart);
     }
 
-    private static final NBTTagCompound hunter_compound = new NBTTagCompound();
-    private static final NBTTagCompound speedrunner_compound = new NBTTagCompound();
+    public void onServerStart(FMLServerStartingEvent e) {
+        MainCommand.registerCommands(e.getCommandDispatcher());
+    }
+
+    private static final CompoundNBT hunter_compound = new CompoundNBT();
+    private static final CompoundNBT speedrunner_compound = new CompoundNBT();
 
     private static final String HUNTER_KEY = "speedrunnervshunter:hunter";
     private static final String SPEEDRUNNER_KEY = "speedrunnervshunter:speedrunner";
@@ -49,23 +56,22 @@ public class SpeedrunnerVsHunter {
     public static int TROPHIES = 3;
 
     static {
-        hunter_compound.setBoolean(HUNTER_KEY, true);
-        speedrunner_compound.setBoolean(SPEEDRUNNER_KEY, true);
+        hunter_compound.putBoolean(HUNTER_KEY, true);
+        speedrunner_compound.putBoolean(SPEEDRUNNER_KEY, true);
     }
 
     private static final Random rand = new Random();
 
     public static void start(MinecraftServer server, int distance) {
         TROPHY_LOCATIONS.clear();
-        for (EntityPlayerMP playerMP : server.getPlayerList().getPlayers()) {
+        for (ServerPlayerEntity playerMP : server.getPlayerList().getPlayers()) {
             ItemStack stack = new ItemStack(Items.COMPASS);
-            stack.setTagCompound(new NBTTagCompound());
             if (playerMP != speedrunner) {
-                stack.setStackDisplayName("Hunter's Compass");
-                stack.getTagCompound().setBoolean(HUNTER_KEY,true);
+                stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
+                stack.getTag().putBoolean(HUNTER_KEY,true);
             } else {
-                stack.setStackDisplayName("Speedrunner's Compass");
-                stack.getTagCompound().setBoolean(SPEEDRUNNER_KEY,true);
+                stack.setDisplayName(new StringTextComponent("Speedrunner's Compass"));
+                stack.getTag().putBoolean(SPEEDRUNNER_KEY,true);
             }
             playerMP.addItemStackToInventory(stack);
         }
@@ -82,17 +88,13 @@ public class SpeedrunnerVsHunter {
             TROPHY_LOCATIONS.add(trophyLocation);
         }
 
-        WorldServer world = server.getWorld(0);
+        ServerWorld world = server.getWorld(DimensionType.OVERWORLD);
 
-        Set<ChunkPos> loaded = world.entitySpawner.eligibleChunksForSpawning;
 
         for (TrophyLocation location : TROPHY_LOCATIONS) {
-            ChunkPos chunkPos = new ChunkPos(location.getPos());
-            if (loaded.contains(chunkPos)) {
-                int y = world.getHeight(location.getPos().getX(), location.getPos().getZ());
-                location.setY(y);
-                world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
-            }
+            int y = world.getHeight(Heightmap.Type.MOTION_BLOCKING,location.getPos().getX(), location.getPos().getZ());
+            location.setY(y);
+            world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
         }
     }
 
@@ -101,22 +103,22 @@ public class SpeedrunnerVsHunter {
         if (e.phase == TickEvent.Phase.START && !e.player.world.isRemote && speedrunner != null) {
             BlockPos nearest;
             if (e.player == speedrunner) {
-                nearest = findNearestTrophy((EntityPlayerMP) e.player);
+                nearest = findNearestTrophy((ServerPlayerEntity) e.player);
             } else {
                 nearest = new BlockPos(speedrunner);
             }
-            ((EntityPlayerMP) e.player).connection.sendPacket(new SPacketSpawnPosition(nearest));
+            ((ServerPlayerEntity) e.player).connection.sendPacket(new SSpawnPositionPacket(nearest));
         }
     }
 
 
     @SubscribeEvent
     public static void loadChunk(ChunkEvent.Load e) {
-        World world = e.getWorld();
+        World world = (World) e.getWorld();
         if (!world.isRemote) {
             for (TrophyLocation pos : TROPHY_LOCATIONS) {
                 if (e.getChunk().getPos().equals(new ChunkPos(pos.getPos())) && !pos.isGenerated()) {
-                    int y = world.getHeight(pos.getPos().getX(), pos.getPos().getZ());
+                    int y = world.getHeight(Heightmap.Type.MOTION_BLOCKING,pos.getPos().getX(), pos.getPos().getZ());
                     pos.setY(y);
                     world.setBlockState(pos.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
                 }
@@ -127,11 +129,11 @@ public class SpeedrunnerVsHunter {
     @SubscribeEvent
     public static void blockBreak(BlockEvent.BreakEvent event) {
         BlockPos pos = event.getPos();
-        EntityPlayer player = event.getPlayer();
+        PlayerEntity player = event.getPlayer();
         for (Iterator<TrophyLocation> iterator = TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
             TrophyLocation trophyLocation = iterator.next();
             if (trophyLocation.getPos().equals(pos)) {
-                player.sendMessage(new TextComponentTranslation("text.speedrunnervshunter.trophy_get"));
+                player.sendMessage(new TranslationTextComponent("text.speedrunnervshunter.trophy_get"));
                 iterator.remove();
             }
         }
@@ -141,7 +143,7 @@ public class SpeedrunnerVsHunter {
         }
     }
 
-    private static BlockPos findNearestTrophy(EntityPlayerMP playerMP) {
+    private static BlockPos findNearestTrophy(ServerPlayerEntity playerMP) {
         double dist = Double.MAX_VALUE;
         BlockPos near = null;
         BlockPos playerPos = playerMP.getPosition();
@@ -157,7 +159,7 @@ public class SpeedrunnerVsHunter {
 
     public static void stop() {
         MinecraftServer server = speedrunner.getServer();
-        server.getPlayerList().sendMessage(new TextComponentTranslation("text.speedrunnervshunter.speedrunner_win"));
+        server.getPlayerList().sendMessage(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"));
         speedrunner = null;
     }
 }

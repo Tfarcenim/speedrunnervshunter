@@ -1,56 +1,41 @@
 package tfar.speedrunnervshunter.commands;
 
 import com.mojang.authlib.GameProfile;
-import net.minecraft.command.CommandBase;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommandSender;
-import net.minecraft.command.WrongUsageException;
+import net.minecraft.command.CommandSource;
+import net.minecraft.command.Commands;
+import net.minecraft.command.arguments.GameProfileArgument;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.util.text.TranslationTextComponent;
 import tfar.speedrunnervshunter.SpeedrunnerVsHunter;
 
-import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.List;
+import java.util.Collection;
 
-public class SpeedrunnerCommand extends CommandBase {
+public class SpeedrunnerCommand {
 
-    private final String s = "commands." + SpeedrunnerVsHunter.MODID + "." + getName();
-
-    @Override
-    public String getName() {
-        return "speedrunner";
+    static ArgumentBuilder<CommandSource, ?> register()
+    {
+        return Commands.literal("start")
+                .requires(cs->cs.hasPermissionLevel(2)) //permission
+                .then(Commands.argument("speedrunner", GameProfileArgument.gameProfile())
+                        .then(Commands.argument("distance", IntegerArgumentType.integer(0))
+                                .executes(ctx -> execute(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "speedrunner"),
+                                IntegerArgumentType.getInteger(ctx,"distance")
+                        )
+                )));
     }
 
-    @Override
-    public String getUsage(ICommandSender sender) {
-        return s + ".usage";
-    }
-
-    @Override
-    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
-        if (args.length >= 2 && args[0].length() > 0) {
-            GameProfile gameprofile = server.getPlayerProfileCache().getGameProfileForUsername(args[0]);
-            int distance = Integer.parseInt(args[1]);
-            if (gameprofile == null) {
-                throw new CommandException(s + ".failed", args[0]);
-            } else {
-                SpeedrunnerVsHunter.speedrunner = server.getPlayerList().getPlayerByUsername(args[0]);
-                server.getPlayerList().sendMessage(new TextComponentTranslation("commands.speedrunnervshunter.speedrunner.success",args[0]));
-                SpeedrunnerVsHunter.start(server,distance);
+    public static int execute(CommandSource source, Collection<GameProfile> target, int distance) throws CommandException {
+            MinecraftServer server = source.getServer();
+            for (GameProfile gameProfile : target) {
+                SpeedrunnerVsHunter.speedrunner = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
             }
-        } else {
-            throw new WrongUsageException(s + ".usage");
-        }
-    }
-
-    /**
-     * Get a list of options for when the user presses the TAB key
-     */
-    @Override
-    public List<String> getTabCompletions(MinecraftServer server, ICommandSender sender, String[] args, @Nullable BlockPos targetPos) {
-        if (args.length == 1) return getListOfStringsMatchingLastWord(args, server.getOnlinePlayerNames());
-        return Collections.emptyList();
+                TranslationTextComponent translationTextComponent =
+                        new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",SpeedrunnerVsHunter.speedrunner.getDisplayName());
+                source.sendFeedback(translationTextComponent,true);
+                SpeedrunnerVsHunter.start(source.getServer(),distance);
+        return 1;
     }
 }
