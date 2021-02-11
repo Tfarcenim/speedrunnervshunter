@@ -7,17 +7,20 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.CompoundNBT;
 
-import net.minecraft.network.play.server.SSpawnPositionPacket;
+import net.minecraft.network.play.server.SWorldSpawnChangedPacket;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
+import net.minecraft.world.DimensionType;
 import net.minecraft.world.World;
-import net.minecraft.world.dimension.DimensionType;
 import net.minecraft.world.gen.Heightmap;
 import net.minecraft.world.server.ServerWorld;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
@@ -43,8 +46,8 @@ public class SpeedrunnerVsHunter {
         MinecraftForge.EVENT_BUS.addListener(this::onServerStart);
     }
 
-    public void onServerStart(FMLServerStartingEvent e) {
-        MainCommand.registerCommands(e.getCommandDispatcher());
+    public void onServerStart(RegisterCommandsEvent e) {
+        MainCommand.registerCommands(e.getDispatcher());
     }
 
     private static final CompoundNBT hunter_compound = new CompoundNBT();
@@ -88,7 +91,7 @@ public class SpeedrunnerVsHunter {
             TROPHY_LOCATIONS.add(trophyLocation);
         }
 
-        ServerWorld world = server.getWorld(DimensionType.OVERWORLD);
+        ServerWorld world = server.getWorld(World.OVERWORLD);
 
 
         for (TrophyLocation location : TROPHY_LOCATIONS) {
@@ -105,9 +108,9 @@ public class SpeedrunnerVsHunter {
             if (e.player == speedrunner) {
                 nearest = findNearestTrophy((ServerPlayerEntity) e.player);
             } else {
-                nearest = new BlockPos(speedrunner);
+                nearest = new BlockPos(speedrunner.getPosition());
             }
-            ((ServerPlayerEntity) e.player).connection.sendPacket(new SSpawnPositionPacket(nearest));
+            ((ServerPlayerEntity) e.player).connection.sendPacket(new SWorldSpawnChangedPacket(nearest,((ServerPlayerEntity) e.player).getServerWorld().func_242107_v()));
         }
     }
 
@@ -133,7 +136,7 @@ public class SpeedrunnerVsHunter {
         for (Iterator<TrophyLocation> iterator = TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
             TrophyLocation trophyLocation = iterator.next();
             if (trophyLocation.getPos().equals(pos)) {
-                player.sendMessage(new TranslationTextComponent("text.speedrunnervshunter.trophy_get"));
+                player.sendMessage(new TranslationTextComponent("text.speedrunnervshunter.trophy_get"), Util.DUMMY_UUID);
                 iterator.remove();
             }
         }
@@ -159,7 +162,7 @@ public class SpeedrunnerVsHunter {
 
     public static void stop() {
         MinecraftServer server = speedrunner.getServer();
-        server.getPlayerList().sendMessage(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"));
+        server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT,Util.DUMMY_UUID);
         speedrunner = null;
     }
 }
