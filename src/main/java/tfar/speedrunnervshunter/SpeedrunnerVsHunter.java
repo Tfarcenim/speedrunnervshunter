@@ -95,7 +95,8 @@ public class SpeedrunnerVsHunter {
 
 
         for (TrophyLocation location : TROPHY_LOCATIONS) {
-            int y = world.getHeight(Heightmap.Type.MOTION_BLOCKING,location.getPos().getX(), location.getPos().getZ());
+            int y = world.getChunk(location.getPos().getX() >> 4, location.getPos().getZ() >> 4)
+                    .getTopBlockY(Heightmap.Type.MOTION_BLOCKING,location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
             location.setY(y);
             world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
         }
@@ -115,7 +116,7 @@ public class SpeedrunnerVsHunter {
     }
 
 
-    @SubscribeEvent
+    /*@SubscribeEvent
     public static void loadChunk(ChunkEvent.Load e) {
         World world = (World) e.getWorld();
         if (!world.isRemote) {
@@ -127,7 +128,7 @@ public class SpeedrunnerVsHunter {
                 }
             }
         }
-    }
+    }*/
 
     @SubscribeEvent
     public static void blockBreak(BlockEvent.BreakEvent event) {
