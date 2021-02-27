@@ -24,9 +24,15 @@ import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraftforge.fml.network.PacketDistributor;
 import tfar.speedrunnervshunter.commands.MainCommand;
+import tfar.speedrunnervshunter.network.PacketHandler;
+import tfar.speedrunnervshunter.network.S2CAddTrophyPosPacket;
+import tfar.speedrunnervshunter.network.S2CRemoveTrophyPosPacket;
 
 import java.util.*;
 
@@ -40,7 +46,17 @@ public class SpeedrunnerVsHunter {
 
     public SpeedrunnerVsHunter() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
+        bus.addListener(this::common);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStart);
+        if (FMLEnvironment.dist.isClient()) {
+            MinecraftForge.EVENT_BUS.addListener(Client::renderLast);
+            MinecraftForge.EVENT_BUS.addListener(Client::logout);
+
+        }
+    }
+
+    public void common(FMLCommonSetupEvent event) {
+        PacketHandler.registerMessages(MODID);
     }
 
     public void onServerStart(FMLServerStartingEvent e) {
@@ -92,9 +108,11 @@ public class SpeedrunnerVsHunter {
 
 
         for (TrophyLocation location : TROPHY_LOCATIONS) {
-            int y = world.getHeight(Heightmap.Type.MOTION_BLOCKING,location.getPos().getX(), location.getPos().getZ());
+            int y = world.getChunk(location.getPos().getX() >> 4, location.getPos().getZ() >> 4)
+                    .getTopBlockY(Heightmap.Type.MOTION_BLOCKING,location.getPos().getX()/16, location.getPos().getZ()/16) + 1;
             location.setY(y);
             world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
+            PacketHandler.INSTANCE.send(PacketDistributor.DIMENSION.with(() -> world.getDimension().getType()),new S2CAddTrophyPosPacket(location.getPos()));
         }
     }
 
@@ -112,7 +130,7 @@ public class SpeedrunnerVsHunter {
     }
 
 
-    @SubscribeEvent
+    /*@SubscribeEvent
     public static void loadChunk(ChunkEvent.Load e) {
         World world = (World) e.getWorld();
         if (!world.isRemote) {
@@ -124,7 +142,7 @@ public class SpeedrunnerVsHunter {
                 }
             }
         }
-    }
+    }*/
 
     @SubscribeEvent
     public static void blockBreak(BlockEvent.BreakEvent event) {
@@ -133,6 +151,8 @@ public class SpeedrunnerVsHunter {
         for (Iterator<TrophyLocation> iterator = TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
             TrophyLocation trophyLocation = iterator.next();
             if (trophyLocation.getPos().equals(pos)) {
+                World world = player.world;
+                PacketHandler.INSTANCE.send(PacketDistributor.DIMENSION.with(() -> world.getDimension().getType()),new S2CRemoveTrophyPosPacket(pos));
                 player.sendMessage(new TranslationTextComponent("text.speedrunnervshunter.trophy_get"));
                 iterator.remove();
             }
