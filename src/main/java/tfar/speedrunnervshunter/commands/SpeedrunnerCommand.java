@@ -5,6 +5,7 @@ import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.command.WrongUsageException;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -36,9 +37,9 @@ public class SpeedrunnerCommand extends CommandBase {
             if (gameprofile == null) {
                 throw new CommandException(s + ".failed", args[0]);
             } else {
-                SpeedrunnerVsHunter.speedrunner = server.getPlayerList().getPlayerByUsername(args[0]);
+                EntityPlayerMP playerMP = server.getPlayerList().getPlayerByUsername(args[0]);
                 server.getPlayerList().sendMessage(new TextComponentTranslation("commands.speedrunnervshunter.speedrunner.success",args[0]));
-                SpeedrunnerVsHunter.start(server,distance);
+                SpeedrunnerVsHunter.start(server,distance,playerMP);
             }
         } else {
             throw new WrongUsageException(s + ".usage");

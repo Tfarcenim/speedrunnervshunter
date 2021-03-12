@@ -13,12 +13,12 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import tfar.speedrunnervshunter.commands.MainCommand;
 
@@ -31,7 +31,7 @@ public class SpeedrunnerVsHunter {
     public static final String NAME = "Speedrunner vs Hunter";
     public static final String VERSION = "1.0";
 
-    public static EntityPlayerMP speedrunner;
+    private static UUID speedrunnerID;
     public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
 
 
@@ -40,33 +40,17 @@ public class SpeedrunnerVsHunter {
         e.registerServerCommand(new MainCommand());
     }
 
-    private static final NBTTagCompound hunter_compound = new NBTTagCompound();
-    private static final NBTTagCompound speedrunner_compound = new NBTTagCompound();
-
-    private static final String HUNTER_KEY = "speedrunnervshunter:hunter";
-    private static final String SPEEDRUNNER_KEY = "speedrunnervshunter:speedrunner";
-
     public static int TROPHIES = 3;
-
-    static {
-        hunter_compound.setBoolean(HUNTER_KEY, true);
-        speedrunner_compound.setBoolean(SPEEDRUNNER_KEY, true);
-    }
 
     private static final Random rand = new Random();
 
-    public static void start(MinecraftServer server, int distance) {
+    public static void start(MinecraftServer server, int distance, EntityPlayerMP speedrunner) {
         TROPHY_LOCATIONS.clear();
+        speedrunnerID = speedrunner.getGameProfile().getId();
         for (EntityPlayerMP playerMP : server.getPlayerList().getPlayers()) {
             ItemStack stack = new ItemStack(Items.COMPASS);
             stack.setTagCompound(new NBTTagCompound());
-            if (playerMP != speedrunner) {
-                stack.setStackDisplayName("Hunter's Compass");
-                stack.getTagCompound().setBoolean(HUNTER_KEY,true);
-            } else {
-                stack.setStackDisplayName("Speedrunner's Compass");
-                stack.getTagCompound().setBoolean(SPEEDRUNNER_KEY,true);
-            }
+            stack.setStackDisplayName(!isSpeedrunner(playerMP) ? "Hunter's" : "Speedrunner's" + " Compass");
             playerMP.addItemStackToInventory(stack);
         }
 
@@ -98,17 +82,21 @@ public class SpeedrunnerVsHunter {
 
     @SubscribeEvent
     public static void serverTick(TickEvent.PlayerTickEvent e) {
-        if (e.phase == TickEvent.Phase.START && !e.player.world.isRemote && speedrunner != null) {
+        if (e.phase == TickEvent.Phase.START && !e.player.world.isRemote && speedrunnerID != null) {
             BlockPos nearest;
-            if (e.player == speedrunner) {
+            if (isSpeedrunner((EntityPlayerMP) e.player)) {
                 nearest = findNearestTrophy((EntityPlayerMP) e.player);
             } else {
-                nearest = new BlockPos(speedrunner);
+                EntityPlayerMP speedrunner = e.player.getServer().getPlayerList().getPlayerByUUID(speedrunnerID);
+                nearest = speedrunner.getPosition();
             }
             ((EntityPlayerMP) e.player).connection.sendPacket(new SPacketSpawnPosition(nearest));
         }
     }
 
+    private static boolean isSpeedrunner(EntityPlayerMP playerMP) {
+        return playerMP.getGameProfile().getId().equals(speedrunnerID);
+    }
 
     @SubscribeEvent
     public static void loadChunk(ChunkEvent.Load e) {
@@ -136,8 +124,15 @@ public class SpeedrunnerVsHunter {
             }
         }
 
-        if (TROPHY_LOCATIONS.isEmpty() && speedrunner != null) {
-            stop();
+        if (TROPHY_LOCATIONS.isEmpty() && speedrunnerID != null) {
+            stop(event.getPlayer().world,false);
+        }
+    }
+
+    @SubscribeEvent
+    public static void logOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (isSpeedrunner((EntityPlayerMP) event.player)) {
+            stop(event.player.world,true);
         }
     }
 
@@ -155,9 +150,11 @@ public class SpeedrunnerVsHunter {
         return near;
     }
 
-    public static void stop() {
-        MinecraftServer server = speedrunner.getServer();
-        server.getPlayerList().sendMessage(new TextComponentTranslation("text.speedrunnervshunter.speedrunner_win"));
-        speedrunner = null;
+    public static void stop(World world,boolean abort) {
+        if (!abort) {
+            MinecraftServer server = world.getMinecraftServer();
+            server.getPlayerList().sendMessage(new TextComponentTranslation("text.speedrunnervshunter.speedrunner_win"));
+        }
+        speedrunnerID = null;
     }
 }
