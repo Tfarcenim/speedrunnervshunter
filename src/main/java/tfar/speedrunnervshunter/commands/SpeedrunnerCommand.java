@@ -30,10 +30,10 @@ public class SpeedrunnerCommand {
     public static int execute(CommandSource source, Collection<GameProfile> target, int distance) throws CommandException {
             MinecraftServer server = source.getServer();
             for (GameProfile gameProfile : target) {
-                SpeedrunnerVsHunter.speedrunner = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
+                SpeedrunnerVsHunter.speedrunnerID = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
             }
                 TranslationTextComponent translationTextComponent =
-                        new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",SpeedrunnerVsHunter.speedrunner.getDisplayName());
+                        new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",SpeedrunnerVsHunter.speedrunnerID.getDisplayName());
                 source.sendFeedback(translationTextComponent,true);
                 SpeedrunnerVsHunter.start(source.getServer(),distance);
         return 1;
