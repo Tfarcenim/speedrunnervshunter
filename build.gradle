@@ -37,6 +37,22 @@ minecraft {
     runs {
         client {
             workingDirectory project.file('run')
+            args '--username=Dev0'
+
+
+            // Recommended logging level for the console
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                examplemod {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client2 {
+            workingDirectory project.file('run')
+            args '--username=Dev1'
 
 
             // Recommended logging level for the console

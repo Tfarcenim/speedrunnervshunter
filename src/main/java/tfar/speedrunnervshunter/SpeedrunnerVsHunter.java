@@ -1,7 +1,9 @@
 package tfar.speedrunnervshunter;
 
+import com.google.common.collect.Lists;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -26,9 +28,12 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.server.ServerLifecycleHooks;
 import tfar.speedrunnervshunter.commands.MainCommand;
 
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Mod(SpeedrunnerVsHunter.MODID)
 @Mod.EventBusSubscriber
@@ -51,7 +56,7 @@ public class SpeedrunnerVsHunter {
 
     private static final Random rand = new Random();
 
-    public static void start(MinecraftServer server, int distance,ServerPlayerEntity speedrunner) {
+    public static void start(MinecraftServer server, int distance, ServerPlayerEntity speedrunner) {
         speedrunnerID = speedrunner.getGameProfile().getId();
         TROPHY_LOCATIONS.clear();
         for (ServerPlayerEntity playerMP : server.getPlayerList().getPlayers()) {
@@ -81,7 +86,7 @@ public class SpeedrunnerVsHunter {
 
         for (TrophyLocation location : TROPHY_LOCATIONS) {
             int y = world.getChunk(location.getPos().getX() >> 4, location.getPos().getZ() >> 4)
-                    .getTopBlockY(Heightmap.Type.MOTION_BLOCKING,location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
+                    .getTopBlockY(Heightmap.Type.MOTION_BLOCKING, location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
             location.setY(y);
             world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
         }
@@ -96,12 +101,47 @@ public class SpeedrunnerVsHunter {
             } else {
                 nearest = new BlockPos(e.player.getServer().getPlayerList().getPlayerByUUID(speedrunnerID).getPosition());
             }
-            ((ServerPlayerEntity) e.player).connection.sendPacket(new SWorldSpawnChangedPacket(nearest,((ServerPlayerEntity) e.player).getServerWorld().func_242107_v()));
+            ((ServerPlayerEntity) e.player).connection.sendPacket(new SWorldSpawnChangedPacket(nearest, ((ServerPlayerEntity) e.player).getServerWorld().func_242107_v()));
         }
     }
 
     private static boolean isSpeedrunner(PlayerEntity player) {
         return player.getGameProfile().getId().equals(speedrunnerID);
+    }
+
+    @SubscribeEvent
+    public static void serverTick(TickEvent.ServerTickEvent event) {
+        if (speedrunnerID != null && event.phase == TickEvent.Phase.START) {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            long time = server.getWorld(World.OVERWORLD).getGameTime();
+            if (time % 1200 == 0) {
+                List<ServerPlayerEntity> players = Lists.newArrayList(server.getPlayerList().getPlayers());
+                players.removeIf(serverPlayerEntity -> serverPlayerEntity.getGameProfile().getId().equals(speedrunnerID));
+                if (!players.isEmpty()) {
+                    ServerPlayerEntity newSpeedrunner = players.get(rand.nextInt(players.size()));
+                    UUID oldSpeedrunnerID = speedrunnerID;
+                    ServerPlayerEntity oldspeedrunner = server.getPlayerList().getPlayerByUUID(oldSpeedrunnerID);
+                    speedrunnerID = newSpeedrunner.getGameProfile().getId();
+
+                    PlayerInventory oldinventory = oldspeedrunner.inventory;
+                    for (ItemStack stack : Stream.of(oldinventory.mainInventory, oldinventory.armorInventory, oldinventory.offHandInventory).flatMap(Collection::stream).collect(Collectors.toList())) {
+                        if (stack.getItem() == Items.COMPASS) {
+                            stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
+                        }
+                    }
+
+                    PlayerInventory newinventory = newSpeedrunner.inventory;
+                    for (ItemStack stack : Stream.of(newinventory.mainInventory, newinventory.armorInventory, newinventory.offHandInventory).flatMap(Collection::stream).collect(Collectors.toList())) {
+                        if (stack.getItem() == Items.COMPASS) {
+                            stack.setDisplayName(new StringTextComponent("Speedrunner's Compass"));
+                        }
+                    }
+                    TranslationTextComponent translationTextComponent =
+                            new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",newSpeedrunner.getDisplayName());
+                    server.sendMessage(translationTextComponent,Util.DUMMY_UUID);
+                }
+            }
+        }
     }
 
 
@@ -122,7 +162,7 @@ public class SpeedrunnerVsHunter {
     @SubscribeEvent
     public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (isSpeedrunner(event.getPlayer())) {
-            stop(event.getPlayer().getServer());
+            stop(event.getPlayer().getServer(),true);
         }
     }
 
@@ -139,7 +179,7 @@ public class SpeedrunnerVsHunter {
         }
 
         if (TROPHY_LOCATIONS.isEmpty() && speedrunnerID != null) {
-            stop(player.getServer());
+            stop(player.getServer(),false);
         }
     }
 
@@ -157,8 +197,9 @@ public class SpeedrunnerVsHunter {
         return near;
     }
 
-    public static void stop(MinecraftServer server) {
-        server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT,Util.DUMMY_UUID);
+    public static void stop(MinecraftServer server,boolean abort) {
+        if (!abort)
+        server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT, Util.DUMMY_UUID);
         speedrunnerID = null;
     }
 }

@@ -7,6 +7,7 @@ import net.minecraft.command.CommandException;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.Commands;
 import net.minecraft.command.arguments.GameProfileArgument;
+import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TranslationTextComponent;
 import tfar.speedrunnervshunter.SpeedrunnerVsHunter;
@@ -29,13 +30,15 @@ public class SpeedrunnerCommand {
 
     public static int execute(CommandSource source, Collection<GameProfile> target, int distance) throws CommandException {
             MinecraftServer server = source.getServer();
+        ServerPlayerEntity speedrunner = null;
             for (GameProfile gameProfile : target) {
-                SpeedrunnerVsHunter.speedrunnerID = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
+                speedrunner = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
             }
+
                 TranslationTextComponent translationTextComponent =
-                        new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",SpeedrunnerVsHunter.speedrunnerID.getDisplayName());
+                        new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",speedrunner.getDisplayName());
                 source.sendFeedback(translationTextComponent,true);
-                SpeedrunnerVsHunter.start(source.getServer(),distance);
+                SpeedrunnerVsHunter.start(source.getServer(),distance,speedrunner);
         return 1;
     }
 }
