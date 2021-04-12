@@ -2,33 +2,49 @@ package tfar.speedrunnervshunter;
 
 import com.google.common.collect.Lists;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.MobEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.nbt.CompoundNBT;
 
+import net.minecraft.network.play.server.STitlePacket;
 import net.minecraft.network.play.server.SWorldSpawnChangedPacket;
+import net.minecraft.potion.EffectInstance;
+import net.minecraft.potion.Effects;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.DamageSource;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
+import net.minecraft.world.BossInfo;
 import net.minecraft.world.World;
 import net.minecraft.world.gen.Heightmap;
+import net.minecraft.world.server.ServerBossInfo;
 import net.minecraft.world.server.ServerWorld;
+import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingFallEvent;
+import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.server.ServerLifecycleHooks;
+import org.apache.commons.lang3.tuple.Pair;
 import tfar.speedrunnervshunter.commands.MainCommand;
 
 import java.util.*;
@@ -43,23 +59,45 @@ public class SpeedrunnerVsHunter {
     public static UUID speedrunnerID;
     public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
 
+    public static SpeedrunnerVsHunter instance;
+    static ForgeConfigSpec serverSpec;
+
     public SpeedrunnerVsHunter() {
+        instance = this;
+
+        final Pair<SpeedrunnerVsHunter, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(this::spec);
+        serverSpec = specPair.getRight();
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, serverSpec);
+
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
         MinecraftForge.EVENT_BUS.addListener(this::onServerStart);
+        MinecraftForge.EVENT_BUS.addListener(this::commands);
+        MinecraftForge.EVENT_BUS.addListener(this::knockback);
     }
 
-    public void onServerStart(RegisterCommandsEvent e) {
+    // private static ServerBossInfo bossInfo;
+
+    public void onServerStart(FMLServerStartingEvent e) {
+
+    }
+
+    public void commands(RegisterCommandsEvent e) {
         MainCommand.registerCommands(e.getDispatcher());
     }
-
-    public static int TROPHIES = 3;
 
     private static final Random rand = new Random();
 
     public static void start(MinecraftServer server, int distance, ServerPlayerEntity speedrunner) {
+
+        // bossInfo = new ServerBossInfo(new StringTextComponent("Timer"), BossInfo.Color.WHITE, BossInfo.Overlay.PROGRESS);
+        // bossInfo.setPercent(1);
+
         speedrunnerID = speedrunner.getGameProfile().getId();
         TROPHY_LOCATIONS.clear();
         for (ServerPlayerEntity playerMP : server.getPlayerList().getPlayers()) {
+
+            //    bossInfo.addPlayer(playerMP);
+
             ItemStack stack = new ItemStack(Items.COMPASS);
             if (!isSpeedrunner(playerMP)) {
                 stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
@@ -73,8 +111,8 @@ public class SpeedrunnerVsHunter {
 
         double rot = rand.nextInt(360);
 
-        for (int i = 0; i < TROPHIES; i++) {
-            double offset = i * 360d / TROPHIES;
+        for (int i = 0; i < TROPHY_COUNT.get(); i++) {
+            double offset = i * 360d / TROPHY_COUNT.get();
             int x = (int) (center.getX() + distance * Math.cos((Math.PI / 180) * (rot + offset)));
             int z = (int) (center.getZ() + distance * Math.sin((Math.PI / 180) * (rot + offset)));
             TrophyLocation trophyLocation = new TrophyLocation(x, z);
@@ -99,6 +137,9 @@ public class SpeedrunnerVsHunter {
             if (isSpeedrunner(e.player)) {
                 nearest = findNearestTrophy((ServerPlayerEntity) e.player);
             } else {
+                if (HUNTERS_BLIND.get() && e.player.world.getGameTime() % 20 == 0) {
+                    e.player.addPotionEffect(new EffectInstance(Effects.BLINDNESS, 80, 0, false, false));
+                }
                 nearest = new BlockPos(e.player.getServer().getPlayerList().getPlayerByUUID(speedrunnerID).getPosition());
             }
             ((ServerPlayerEntity) e.player).connection.sendPacket(new SWorldSpawnChangedPacket(nearest, ((ServerPlayerEntity) e.player).getServerWorld().func_242107_v()));
@@ -109,12 +150,24 @@ public class SpeedrunnerVsHunter {
         return player.getGameProfile().getId().equals(speedrunnerID);
     }
 
+    public static int TIME_LIMIT = 1200;
+
     @SubscribeEvent
     public static void serverTick(TickEvent.ServerTickEvent event) {
         if (speedrunnerID != null && event.phase == TickEvent.Phase.START) {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-            long time = server.getWorld(World.OVERWORLD).getGameTime();
-            if (time % 1200 == 0) {
+
+
+            final long scaledTime = server.getWorld(World.OVERWORLD).getGameTime() % TIME_LIMIT;
+            //  bossInfo.setPercent(1 - (scaledTime / (float)TIME_LIMIT));
+            if (scaledTime == TIME_LIMIT - 200) {
+                final List<ServerPlayerEntity> players = server.getPlayerList().getPlayers().stream().filter(playerMP -> !(playerMP instanceof FakePlayer)).collect(Collectors.toList());
+                //if (players.size() > 1) {
+                //          server.getPlayerList().func_232641_a_(new StringTextComponent("Swapping in 10 seconds!"),ChatType.CHAT,Util.DUMMY_UUID);
+                //  }
+            }
+
+            if (scaledTime == 0 && false) {
                 List<ServerPlayerEntity> players = Lists.newArrayList(server.getPlayerList().getPlayers());
                 players.removeIf(serverPlayerEntity -> serverPlayerEntity.getGameProfile().getId().equals(speedrunnerID));
                 if (!players.isEmpty()) {
@@ -137,32 +190,49 @@ public class SpeedrunnerVsHunter {
                         }
                     }
                     TranslationTextComponent translationTextComponent =
-                            new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",newSpeedrunner.getDisplayName());
-                    server.sendMessage(translationTextComponent,Util.DUMMY_UUID);
+                            new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success", newSpeedrunner.getDisplayName());
+                    server.getPlayerList().func_232641_a_(translationTextComponent, ChatType.CHAT, Util.DUMMY_UUID);
                 }
             }
         }
     }
 
+    public static void updateStatus(ServerPlayerEntity playerEntity) {
+        if (isSpeedrunner(playerEntity)) {
+            playerEntity.connection.sendPacket(new STitlePacket(STitlePacket.Type.ACTIONBAR, new StringTextComponent("You're the Speedrunner"), 0, TIME_LIMIT, 0));
+        } else {
+            playerEntity.connection.sendPacket(new STitlePacket(STitlePacket.Type.ACTIONBAR, new StringTextComponent("You're a Hunter"), 0, TIME_LIMIT, 0));
+        }
+    }
 
-    /*@SubscribeEvent
-    public static void loadChunk(ChunkEvent.Load e) {
-        World world = (World) e.getWorld();
-        if (!world.isRemote) {
-            for (TrophyLocation pos : TROPHY_LOCATIONS) {
-                if (e.getChunk().getPos().equals(new ChunkPos(pos.getPos())) && !pos.isGenerated()) {
-                    int y = world.getHeight(Heightmap.Type.MOTION_BLOCKING,pos.getPos().getX(), pos.getPos().getZ());
-                    pos.setY(y);
-                    world.setBlockState(pos.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
-                }
+    private void knockback(LivingKnockBackEvent event) {
+        if (MOBS_KNOCKBACK_10000.get()) {
+            LivingEntity target = event.getEntityLiving();
+            // DamageSource source = target.getLastDamageSource();
+            LivingEntity attacker = target.getRevengeTarget();
+            if (attacker instanceof MobEntity) {
+                event.setStrength(event.getOriginalStrength() + 5000);
             }
         }
-    }*/
+    }
+
+    public static ForgeConfigSpec.IntValue TROPHY_COUNT;
+    public static ForgeConfigSpec.BooleanValue HUNTERS_BLIND;
+    public static ForgeConfigSpec.BooleanValue MOBS_KNOCKBACK_10000;
+
+
+    private SpeedrunnerVsHunter spec(ForgeConfigSpec.Builder builder) {
+        builder.push("general");
+        TROPHY_COUNT = builder.defineInRange("trophy_count", 3, 1, 10000);
+        HUNTERS_BLIND = builder.define("hunters_blind", false);
+        MOBS_KNOCKBACK_10000 = builder.define("mobs_knockback_10000", false);
+        return null;
+    }
 
     @SubscribeEvent
     public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (isSpeedrunner(event.getPlayer())) {
-            stop(event.getPlayer().getServer(),true);
+            stop(event.getPlayer().getServer(), true);
         }
     }
 
@@ -179,7 +249,7 @@ public class SpeedrunnerVsHunter {
         }
 
         if (TROPHY_LOCATIONS.isEmpty() && speedrunnerID != null) {
-            stop(player.getServer(),false);
+            stop(player.getServer(), false);
         }
     }
 
@@ -197,9 +267,17 @@ public class SpeedrunnerVsHunter {
         return near;
     }
 
-    public static void stop(MinecraftServer server,boolean abort) {
+    private static ServerPlayerEntity getOtherPlayer(ServerPlayerEntity player) {
+        MinecraftServer server = player.getServer();
+        List<ServerPlayerEntity> otherPlayers = new ArrayList<>(server.getPlayerList().getPlayers());
+        otherPlayers.removeIf(serverPlayerEntity -> serverPlayerEntity.getGameProfile().getId().equals(player.getGameProfile().getId()));
+        return !otherPlayers.isEmpty() ? otherPlayers.get(0) : null;
+    }
+
+    public static void stop(MinecraftServer server, boolean abort) {
+        //bossInfo.removeAllPlayers();
         if (!abort)
-        server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT, Util.DUMMY_UUID);
+            server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT, Util.DUMMY_UUID);
         speedrunnerID = null;
     }
 }
