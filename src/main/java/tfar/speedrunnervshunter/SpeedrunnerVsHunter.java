@@ -33,6 +33,7 @@ import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingFallEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.world.BlockEvent;
@@ -59,11 +60,9 @@ public class SpeedrunnerVsHunter {
     public static UUID speedrunnerID;
     public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
 
-    public static SpeedrunnerVsHunter instance;
     static ForgeConfigSpec serverSpec;
 
     public SpeedrunnerVsHunter() {
-        instance = this;
 
         final Pair<SpeedrunnerVsHunter, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(this::spec);
         serverSpec = specPair.getRight();
@@ -73,6 +72,7 @@ public class SpeedrunnerVsHunter {
         MinecraftForge.EVENT_BUS.addListener(this::onServerStart);
         MinecraftForge.EVENT_BUS.addListener(this::commands);
         MinecraftForge.EVENT_BUS.addListener(this::knockback);
+        MinecraftForge.EVENT_BUS.addListener(this::fallDamage);
     }
 
     // private static ServerBossInfo bossInfo;
@@ -216,9 +216,20 @@ public class SpeedrunnerVsHunter {
         }
     }
 
+    private void fallDamage(LivingHurtEvent e) {
+        if (FALL_DAMAGE_HEALS_SPEEDRUNNER.get()) {
+            LivingEntity living = e.getEntityLiving();
+            if (e.getSource() == DamageSource.FALL && living instanceof PlayerEntity && isSpeedrunner((PlayerEntity) living)) {
+                living.heal(e.getAmount());
+                e.setCanceled(true);
+            }
+        }
+    }
+
     public static ForgeConfigSpec.IntValue TROPHY_COUNT;
     public static ForgeConfigSpec.BooleanValue HUNTERS_BLIND;
     public static ForgeConfigSpec.BooleanValue MOBS_KNOCKBACK_10000;
+    public static ForgeConfigSpec.BooleanValue FALL_DAMAGE_HEALS_SPEEDRUNNER;
 
 
     private SpeedrunnerVsHunter spec(ForgeConfigSpec.Builder builder) {
@@ -226,6 +237,7 @@ public class SpeedrunnerVsHunter {
         TROPHY_COUNT = builder.defineInRange("trophy_count", 3, 1, 10000);
         HUNTERS_BLIND = builder.define("hunters_blind", false);
         MOBS_KNOCKBACK_10000 = builder.define("mobs_knockback_10000", false);
+        FALL_DAMAGE_HEALS_SPEEDRUNNER = builder.define("fall_damage_heals_speedrunner",false);
         return null;
     }
 
