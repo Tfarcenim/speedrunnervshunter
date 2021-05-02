@@ -73,7 +73,7 @@ public class SpeedrunnerVsHunter {
         for (TrophyLocation location : TROPHY_LOCATIONS) {
             ChunkPos chunkPos = new ChunkPos(location.getPos());
             if (loaded.contains(chunkPos)) {
-                int y = world.getHeight(location.getPos().getX(), location.getPos().getZ());
+                int y = Math.max(64,world.getHeight(location.getPos().getX(), location.getPos().getZ()));
                 location.setY(y);
                 world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
             }
