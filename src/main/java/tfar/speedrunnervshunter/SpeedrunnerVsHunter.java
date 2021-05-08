@@ -40,8 +40,6 @@ public class SpeedrunnerVsHunter {
         e.registerServerCommand(new MainCommand());
     }
 
-    public static int TROPHIES = 3;
-
     private static final Random rand = new Random();
 
     public static void start(MinecraftServer server, int distance, EntityPlayerMP speedrunner) {
@@ -57,6 +55,8 @@ public class SpeedrunnerVsHunter {
         BlockPos center = speedrunner.getPosition();
 
         double rot = rand.nextInt(360);
+
+        int TROPHIES = ModConfig.infinity_gauntlet_mode ? 6 : ModConfig.trophy_count;
 
         for (int i = 0; i < TROPHIES; i++) {
             double offset = i * 360d / TROPHIES;
@@ -116,16 +116,21 @@ public class SpeedrunnerVsHunter {
     public static void blockBreak(BlockEvent.BreakEvent event) {
         BlockPos pos = event.getPos();
         EntityPlayer player = event.getPlayer();
-        for (Iterator<TrophyLocation> iterator = TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
-            TrophyLocation trophyLocation = iterator.next();
-            if (trophyLocation.getPos().equals(pos)) {
-                player.sendMessage(new TextComponentTranslation("text.speedrunnervshunter.trophy_get"));
-                iterator.remove();
+        if (isSpeedrunner((EntityPlayerMP) player)) {
+            for (Iterator<TrophyLocation> iterator = TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
+                TrophyLocation trophyLocation = iterator.next();
+                if (trophyLocation.getPos().equals(pos)) {
+                    player.sendMessage(new TextComponentTranslation("text.speedrunnervshunter.trophy_get"));
+                    iterator.remove();
+                    if (ModConfig.infinity_gauntlet_mode) {
+                        GauntletEvents.giveStone(player);
+                    }
+                }
             }
-        }
 
-        if (TROPHY_LOCATIONS.isEmpty() && speedrunnerID != null) {
-            stop(event.getPlayer().world,false);
+            if (TROPHY_LOCATIONS.isEmpty() && speedrunnerID != null) {
+                stop(event.getPlayer().world, false);
+            }
         }
     }
 
