@@ -16,29 +16,28 @@ import java.util.Collection;
 
 public class SpeedrunnerCommand {
 
-    static ArgumentBuilder<CommandSource, ?> register()
-    {
+    static ArgumentBuilder<CommandSource, ?> register() {
         return Commands.literal("start")
-                .requires(cs->cs.hasPermissionLevel(2)) //permission
+                .requires(cs -> cs.hasPermissionLevel(2)) //permission
                 .then(Commands.argument("speedrunner", GameProfileArgument.gameProfile())
                         .then(Commands.argument("distance", IntegerArgumentType.integer(0))
                                 .executes(ctx -> execute(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "speedrunner"),
-                                IntegerArgumentType.getInteger(ctx,"distance")
-                        )
-                )));
+                                        IntegerArgumentType.getInteger(ctx, "distance")
+                                        )
+                                )));
     }
 
     public static int execute(CommandSource source, Collection<GameProfile> target, int distance) throws CommandException {
-            MinecraftServer server = source.getServer();
+        MinecraftServer server = source.getServer();
         ServerPlayerEntity speedrunner = null;
-            for (GameProfile gameProfile : target) {
-                speedrunner = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
-            }
+        for (GameProfile gameProfile : target) {
+            speedrunner = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
+        }
 
-                TranslationTextComponent translationTextComponent =
-                        new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success",speedrunner.getDisplayName());
-                source.sendFeedback(translationTextComponent,true);
-                SpeedrunnerVsHunter.start(source.getServer(),distance,speedrunner);
+        TranslationTextComponent translationTextComponent =
+                new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success", speedrunner.getDisplayName());
+        source.sendFeedback(translationTextComponent, true);
+        SpeedrunnerVsHunter.start(source.getServer(), distance, speedrunner);
         return 1;
     }
 }

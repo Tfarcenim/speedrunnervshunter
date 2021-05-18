@@ -5,12 +5,12 @@ import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MobEntity;
+import net.minecraft.entity.Pose;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-
 import net.minecraft.network.play.server.STitlePacket;
 import net.minecraft.network.play.server.SWorldSpawnChangedPacket;
 import net.minecraft.potion.EffectInstance;
@@ -22,23 +22,22 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
-import net.minecraft.world.BossInfo;
 import net.minecraft.world.World;
 import net.minecraft.world.gen.Heightmap;
-import net.minecraft.world.server.ServerBossInfo;
 import net.minecraft.world.server.ServerWorld;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.living.LivingFallEvent;
+import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.LivingKnockBackEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
@@ -73,6 +72,7 @@ public class SpeedrunnerVsHunter {
         MinecraftForge.EVENT_BUS.addListener(this::commands);
         MinecraftForge.EVENT_BUS.addListener(this::knockback);
         MinecraftForge.EVENT_BUS.addListener(this::fallDamage);
+        MinecraftForge.EVENT_BUS.addListener(this::sneak);
     }
 
     // private static ServerBossInfo bossInfo;
@@ -205,6 +205,16 @@ public class SpeedrunnerVsHunter {
         }
     }
 
+    private void sneak(EntityEvent.Size e) {
+        Entity entity = e.getEntity();
+        if (entity instanceof PlayerEntity && !entity.world.isRemote) {
+            PlayerEntity player = (PlayerEntity)entity;
+            if (e.getPose() == Pose.CROUCHING && isSpeedrunner(player) && ModList.get().isLoaded("naturaldisasters")) {
+                Utils.randomDisasterToHunters(player);
+            }
+        }
+    }
+
     private void knockback(LivingKnockBackEvent event) {
         if (MOBS_KNOCKBACK_10000.get()) {
             LivingEntity target = event.getEntityLiving();
@@ -230,6 +240,7 @@ public class SpeedrunnerVsHunter {
     public static ForgeConfigSpec.BooleanValue HUNTERS_BLIND;
     public static ForgeConfigSpec.BooleanValue MOBS_KNOCKBACK_10000;
     public static ForgeConfigSpec.BooleanValue FALL_DAMAGE_HEALS_SPEEDRUNNER;
+    public static ForgeConfigSpec.BooleanValue RANDOM_HUNTER_DISASTER;
 
 
     private SpeedrunnerVsHunter spec(ForgeConfigSpec.Builder builder) {
@@ -238,6 +249,7 @@ public class SpeedrunnerVsHunter {
         HUNTERS_BLIND = builder.define("hunters_blind", false);
         MOBS_KNOCKBACK_10000 = builder.define("mobs_knockback_10000", false);
         FALL_DAMAGE_HEALS_SPEEDRUNNER = builder.define("fall_damage_heals_speedrunner",false);
+        RANDOM_HUNTER_DISASTER = builder.define("random_hunter_disaster",false);
         return null;
     }
 
