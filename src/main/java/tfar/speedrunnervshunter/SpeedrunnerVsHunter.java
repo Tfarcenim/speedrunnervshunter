@@ -15,6 +15,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -34,6 +35,11 @@ public class SpeedrunnerVsHunter {
     private static UUID speedrunnerID;
     public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
 
+    public static boolean MORPH_HERE;
+
+    public SpeedrunnerVsHunter() {
+        MORPH_HERE = Loader.isModLoaded("morph");
+    }
 
     @Mod.EventHandler
     public void onServerStart(FMLServerStartingEvent e) {
@@ -50,6 +56,9 @@ public class SpeedrunnerVsHunter {
             stack.setTagCompound(new NBTTagCompound());
             stack.setStackDisplayName(!isSpeedrunner(playerMP) ? "Hunter's" : "Speedrunner's" + " Compass");
             playerMP.addItemStackToInventory(stack);
+            if (isSpeedrunner(playerMP) && MORPH_HERE) {
+                ModProxy.grantHunterMorphsTo(playerMP);
+            }
         }
 
         BlockPos center = speedrunner.getPosition();
