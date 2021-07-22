@@ -11,14 +11,17 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.network.play.server.STitlePacket;
 import net.minecraft.network.play.server.SWorldSpawnChangedPacket;
 import net.minecraft.potion.EffectInstance;
 import net.minecraft.potion.Effects;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.DamageSource;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.registry.Registry;
 import net.minecraft.util.text.ChatType;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
@@ -94,19 +97,11 @@ public class SpeedrunnerVsHunter {
 
         speedrunnerID = speedrunner.getGameProfile().getId();
         TROPHY_LOCATIONS.clear();
-        for (ServerPlayerEntity playerMP : server.getPlayerList().getPlayers()) {
+        giveItems(server);
+        placeTrophies(server, distance, speedrunner);
+    }
 
-            //    bossInfo.addPlayer(playerMP);
-
-            ItemStack stack = new ItemStack(Items.COMPASS);
-            if (!isSpeedrunner(playerMP)) {
-                stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
-            } else {
-                stack.setDisplayName(new StringTextComponent("Speedrunner's Compass"));
-            }
-            playerMP.addItemStackToInventory(stack);
-        }
-
+    private static void placeTrophies(MinecraftServer server, int distance, PlayerEntity speedrunner) {
         BlockPos center = speedrunner.getPosition();
 
         double rot = rand.nextInt(360);
@@ -197,6 +192,19 @@ public class SpeedrunnerVsHunter {
         }
     }
 
+    private static void giveItems(MinecraftServer server) {
+        for (ServerPlayerEntity playerMP : server.getPlayerList().getPlayers()) {
+            ItemStack stack = new ItemStack(Items.COMPASS);
+            if (!isSpeedrunner(playerMP)) {
+                stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
+            } else {
+                stack.setDisplayName(new StringTextComponent("Speedrunner's Compass"));
+                playerMP.addItemStackToInventory(new ItemStack(ModProxy.WRENCH));
+            }
+            playerMP.addItemStackToInventory(stack);
+        }
+    }
+
     public static void updateStatus(ServerPlayerEntity playerEntity) {
         if (isSpeedrunner(playerEntity)) {
             playerEntity.connection.sendPacket(new STitlePacket(STitlePacket.Type.ACTIONBAR, new StringTextComponent("You're the Speedrunner"), 0, TIME_LIMIT, 0));
@@ -208,7 +216,7 @@ public class SpeedrunnerVsHunter {
     private void sneak(EntityEvent.Size e) {
         Entity entity = e.getEntity();
         if (entity instanceof PlayerEntity && !entity.world.isRemote) {
-            PlayerEntity player = (PlayerEntity)entity;
+            PlayerEntity player = (PlayerEntity) entity;//naturaldisasters
             if (e.getPose() == Pose.CROUCHING && isSpeedrunner(player) && ModList.get().isLoaded("naturaldisasters")) {
                 Utils.randomDisasterToHunters(player);
             }
@@ -241,17 +249,34 @@ public class SpeedrunnerVsHunter {
     public static ForgeConfigSpec.BooleanValue MOBS_KNOCKBACK_10000;
     public static ForgeConfigSpec.BooleanValue FALL_DAMAGE_HEALS_SPEEDRUNNER;
     public static ForgeConfigSpec.BooleanValue RANDOM_HUNTER_DISASTER;
+    //  public static ForgeConfigSpec.ConfigValue<List<? extends String>> ITEM_DROPS_1;
+    // public static ForgeConfigSpec.ConfigValue<List<? extends String>> ITEM_DROPS_2;
 
 
     private SpeedrunnerVsHunter spec(ForgeConfigSpec.Builder builder) {
         builder.push("general");
-        TROPHY_COUNT = builder.defineInRange("trophy_count", 3, 1, 10000);
+        TROPHY_COUNT = builder.defineInRange("trophy_count", 6, 1, 10000);
         HUNTERS_BLIND = builder.define("hunters_blind", false);
         MOBS_KNOCKBACK_10000 = builder.define("mobs_knockback_10000", false);
-        FALL_DAMAGE_HEALS_SPEEDRUNNER = builder.define("fall_damage_heals_speedrunner",false);
-        RANDOM_HUNTER_DISASTER = builder.define("random_hunter_disaster",false);
+        FALL_DAMAGE_HEALS_SPEEDRUNNER = builder.define("fall_damage_heals_speedrunner", false);
+        RANDOM_HUNTER_DISASTER = builder.define("random_hunter_disaster", false);
+        //  ITEM_DROPS_1 = builder.defineList("item_drops_1",defaultGuns(),String.class::isInstance);
+        //  ITEM_DROPS_2 = builder.defineList("item_drops_2",defaultAmmo(),String.class::isInstance);
+
         return null;
     }
+
+    //  public static List<String> defaultGuns() {
+    //      List<String> guns = Lists.newArrayList(ModItems.PISTOL,ModItems.SHOTGUN,ModItems.MACHINE_PISTOL,ModItems.ASSAULT_RIFLE,ModItems.BAZOOKA).stream()
+    //              .map(RegistryObject::getId).map(ResourceLocation::toString).collect(Collectors.toList());
+    //      return guns;
+    //   }
+
+    // public static List<String> defaultAmmo() {
+    //       List<String> guns = Lists.newArrayList(ModItems.BASIC_BULLET,ModItems.SHELL,ModItems.BASIC_BULLET,ModItems.BASIC_BULLET,ModItems.MISSILE)
+    //              .stream().map(registryObject -> registryObject.getId()).map(resourceLocation -> resourceLocation.toString()).collect(Collectors.toList());
+    //     return guns;
+    // }
 
     @SubscribeEvent
     public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
@@ -259,6 +284,8 @@ public class SpeedrunnerVsHunter {
             stop(event.getPlayer().getServer(), true);
         }
     }
+
+    public static int INDEX = 0;
 
     @SubscribeEvent
     public static void blockBreak(BlockEvent.BreakEvent event) {
@@ -269,12 +296,50 @@ public class SpeedrunnerVsHunter {
             if (trophyLocation.getPos().equals(pos)) {
                 player.sendMessage(new TranslationTextComponent("text.speedrunnervshunter.trophy_get"), Util.DUMMY_UUID);
                 iterator.remove();
+                handleSpecialDrops(player);
             }
         }
 
         if (TROPHY_LOCATIONS.isEmpty() && speedrunnerID != null) {
             stop(player.getServer(), false);
         }
+    }
+
+    private static void handleSpecialDrops(PlayerEntity player) {
+        List<ItemStack> vehicles = vehicles();
+        if (vehicles.size() > INDEX) {
+
+            ItemStack fuelStack = new ItemStack(
+                    Registry.ITEM.getOrDefault(new ResourceLocation(ModProxy.CRAYFISH_VEHICLES, "industrial_jerry_can")));
+
+            fuelStack.getOrCreateTag().putInt("Fuel", 15000);
+
+            player.addItemStackToInventory(vehicles.get(INDEX));
+            player.addItemStackToInventory(fuelStack);
+        }
+        INDEX++;
+    }
+
+    public static List<ItemStack> vehicles() {
+        List<ItemStack> stacks = new ArrayList<>();
+        stacks.add(makeCrate("vehicle:bumper_car"));
+        stacks.add(makeCrate("vehicle:moped"));
+        stacks.add(makeCrate("vehicle:smart_car"));
+        stacks.add(makeCrate("vehicle:mini_bike"));
+        stacks.add(makeCrate("vehicle:go_kart"));
+        stacks.add(makeCrate("vehicle:sports_plane"));
+
+        return stacks;
+    }
+
+    public static ItemStack makeCrate(String vehicle) {
+        ItemStack stack = new ItemStack(ModProxy.VEHICLE_CRATE);
+        CompoundNBT tag = new CompoundNBT();
+        tag.putString("Vehicle", vehicle);
+        tag.putInt("WheelType", 0);
+        tag.putInt("EngineTier", 0);
+        stack.getOrCreateTag().put("BlockEntityTag", tag);
+        return stack;
     }
 
     private static BlockPos findNearestTrophy(ServerPlayerEntity playerMP) {
@@ -300,8 +365,10 @@ public class SpeedrunnerVsHunter {
 
     public static void stop(MinecraftServer server, boolean abort) {
         //bossInfo.removeAllPlayers();
+        TROPHY_LOCATIONS.clear();
         if (!abort)
             server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT, Util.DUMMY_UUID);
         speedrunnerID = null;
+        INDEX = 0;
     }
 }
