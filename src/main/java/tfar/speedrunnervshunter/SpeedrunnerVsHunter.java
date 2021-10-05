@@ -36,9 +36,11 @@ public class SpeedrunnerVsHunter {
     public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
 
     public static boolean MORPH_HERE;
+    public static boolean FLANS;
 
     public SpeedrunnerVsHunter() {
         MORPH_HERE = Loader.isModLoaded("morph");
+        FLANS = Loader.isModLoaded("flansmod");
     }
 
     @Mod.EventHandler
@@ -60,7 +62,10 @@ public class SpeedrunnerVsHunter {
                 ModProxy.grantHunterMorphsTo(playerMP);
             }
         }
+        placeTrophies(server, distance, speedrunner);
+    }
 
+    private static void placeTrophies(MinecraftServer server, int distance, EntityPlayerMP speedrunner) {
         BlockPos center = speedrunner.getPosition();
 
         double rot = rand.nextInt(360);
@@ -131,9 +136,7 @@ public class SpeedrunnerVsHunter {
                 if (trophyLocation.getPos().equals(pos)) {
                     player.sendMessage(new TextComponentTranslation("text.speedrunnervshunter.trophy_get"));
                     iterator.remove();
-                    if (ModConfig.infinity_gauntlet_mode) {
-                        GauntletEvents.giveStone(player);
-                    }
+                    rewardsOnBreak(player,pos);
                 }
             }
 
@@ -141,6 +144,19 @@ public class SpeedrunnerVsHunter {
                 stop(event.getPlayer().world, false);
             }
         }
+    }
+
+    public static int INDEX = 0;
+
+    private static void rewardsOnBreak(EntityPlayer player, BlockPos pos) {
+        if (ModConfig.infinity_gauntlet_mode) {
+            GauntletEvents.giveStone(player);
+        }
+
+        if (FLANS) {
+            VehicleEvents.giveVehicle(player);
+        }
+        INDEX++;
     }
 
     @SubscribeEvent
@@ -170,5 +186,6 @@ public class SpeedrunnerVsHunter {
             server.getPlayerList().sendMessage(new TextComponentTranslation("text.speedrunnervshunter.speedrunner_win"));
         }
         speedrunnerID = null;
+        INDEX = 0;
     }
 }

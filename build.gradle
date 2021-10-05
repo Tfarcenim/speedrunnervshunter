@@ -54,6 +54,7 @@ dependencies {
     deobfCompile "curse.maven:morph:2995522"
     deobfCompile "curse.maven:ichunutil:2801262"
 
+    deobfCompile "curse.maven:flans-mod-5-5-2:3278090"
 
     // the 'provided' configuration is for optional dependencies that exist at compile-time but might not at runtime.
     //provided 'com.mod-buildcraft:buildcraft:6.0.8:dev'

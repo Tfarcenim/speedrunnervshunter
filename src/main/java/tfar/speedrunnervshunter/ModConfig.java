@@ -6,7 +6,7 @@ import net.minecraftforge.common.config.Config;
 public class ModConfig {
 
     @Config.Name("trophy_count")
-    public static int trophy_count = 3;
+    public static int trophy_count = 6;
 
     @Config.Name("infinity_gauntlet_mode")
     public static boolean infinity_gauntlet_mode = false;
