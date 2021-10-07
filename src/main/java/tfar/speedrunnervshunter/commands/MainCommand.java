@@ -9,7 +9,8 @@ public class MainCommand {
 
     public static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
-        LiteralArgumentBuilder.<CommandSourceStack>literal(SpeedrunnerVsHunter.MODID)
-                .then(SpeedrunnerCommand.register()));
+                LiteralArgumentBuilder.<CommandSourceStack>literal(SpeedrunnerVsHunter.MODID)
+                        .then(StartCommand.register())
+                        .then(StopCommand.register()));
     }
 }
