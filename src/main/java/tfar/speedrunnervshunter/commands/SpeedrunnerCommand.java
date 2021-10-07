@@ -3,22 +3,21 @@ package tfar.speedrunnervshunter.commands;
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
-import net.minecraft.command.CommandException;
-import net.minecraft.command.CommandSource;
-import net.minecraft.command.Commands;
-import net.minecraft.command.arguments.GameProfileArgument;
-import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.GameProfileArgument;
+import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TranslationTextComponent;
+import net.minecraft.server.level.ServerPlayer;
 import tfar.speedrunnervshunter.SpeedrunnerVsHunter;
 
 import java.util.Collection;
 
 public class SpeedrunnerCommand {
 
-    static ArgumentBuilder<CommandSource, ?> register() {
+    static ArgumentBuilder<CommandSourceStack, ?> register() {
         return Commands.literal("start")
-                .requires(cs -> cs.hasPermissionLevel(2)) //permission
+                .requires(cs -> cs.hasPermission(2)) //permission
                 .then(Commands.argument("speedrunner", GameProfileArgument.gameProfile())
                         .then(Commands.argument("distance", IntegerArgumentType.integer(0))
                                 .executes(ctx -> execute(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "speedrunner"),
@@ -27,16 +26,16 @@ public class SpeedrunnerCommand {
                                 )));
     }
 
-    public static int execute(CommandSource source, Collection<GameProfile> target, int distance) throws CommandException {
+    public static int execute(CommandSourceStack source, Collection<GameProfile> target, int distance) {
         MinecraftServer server = source.getServer();
-        ServerPlayerEntity speedrunner = null;
+        ServerPlayer speedrunner = null;
         for (GameProfile gameProfile : target) {
-            speedrunner = server.getPlayerList().getPlayerByUUID(gameProfile.getId());
+            speedrunner = server.getPlayerList().getPlayer(gameProfile.getId());
         }
 
-        TranslationTextComponent translationTextComponent =
-                new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success", speedrunner.getDisplayName());
-        source.sendFeedback(translationTextComponent, true);
+        TranslatableComponent translationTextComponent =
+                new TranslatableComponent("commands.speedrunnervshunter.speedrunner.success", speedrunner.getDisplayName());
+        source.sendSuccess(translationTextComponent, true);
         SpeedrunnerVsHunter.start(source.getServer(), distance, speedrunner);
         return 1;
     }

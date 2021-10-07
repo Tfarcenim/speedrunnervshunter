@@ -1,33 +1,32 @@
 package tfar.speedrunnervshunter;
 
 import com.google.common.collect.Lists;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.MobEntity;
-import net.minecraft.entity.Pose;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.play.server.STitlePacket;
-import net.minecraft.network.play.server.SWorldSpawnChangedPacket;
-import net.minecraft.potion.EffectInstance;
-import net.minecraft.potion.Effects;
+import net.minecraft.Util;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.ChatType;
+import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.TranslatableComponent;
+import net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.Util;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.registry.Registry;
-import net.minecraft.util.text.ChatType;
-import net.minecraft.util.text.StringTextComponent;
-import net.minecraft.util.text.TranslationTextComponent;
-import net.minecraft.world.World;
-import net.minecraft.world.gen.Heightmap;
-import net.minecraft.world.server.ServerWorld;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayer;
@@ -44,9 +43,9 @@ import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.fml.server.ServerLifecycleHooks;
+import net.minecraftforge.fmllegacy.server.ServerLifecycleHooks;
+import net.minecraftforge.fmlserverevents.FMLServerStartingEvent;
 import org.apache.commons.lang3.tuple.Pair;
 import tfar.speedrunnervshunter.commands.MainCommand;
 
@@ -90,9 +89,9 @@ public class SpeedrunnerVsHunter {
 
     private static final Random rand = new Random();
 
-    public static void start(MinecraftServer server, int distance, ServerPlayerEntity speedrunner) {
+    public static void start(MinecraftServer server, int distance, ServerPlayer speedrunner) {
 
-        // bossInfo = new ServerBossInfo(new StringTextComponent("Timer"), BossInfo.Color.WHITE, BossInfo.Overlay.PROGRESS);
+        // bossInfo = new ServerBossInfo(new TextComponent("Timer"), BossInfo.Color.WHITE, BossInfo.Overlay.PROGRESS);
         // bossInfo.setPercent(1);
 
         speedrunnerID = speedrunner.getGameProfile().getId();
@@ -101,8 +100,8 @@ public class SpeedrunnerVsHunter {
         placeTrophies(server, distance, speedrunner);
     }
 
-    private static void placeTrophies(MinecraftServer server, int distance, PlayerEntity speedrunner) {
-        BlockPos center = speedrunner.getPosition();
+    private static void placeTrophies(MinecraftServer server, int distance, Player speedrunner) {
+        BlockPos center = speedrunner.blockPosition();
 
         double rot = rand.nextInt(360);
 
@@ -114,34 +113,34 @@ public class SpeedrunnerVsHunter {
             TROPHY_LOCATIONS.add(trophyLocation);
         }
 
-        ServerWorld world = server.getWorld(World.OVERWORLD);
+        ServerLevel world = server.getLevel(Level.OVERWORLD);
 
 
         for (TrophyLocation location : TROPHY_LOCATIONS) {
             int y = world.getChunk(location.getPos().getX() >> 4, location.getPos().getZ() >> 4)
-                    .getTopBlockY(Heightmap.Type.MOTION_BLOCKING, location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
+                    .getHeight(Heightmap.Types.MOTION_BLOCKING, location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
             location.setY(y);
-            world.setBlockState(location.getPos(), Blocks.GOLD_BLOCK.getDefaultState());
+            world.setBlockAndUpdate(location.getPos(), Blocks.GOLD_BLOCK.defaultBlockState());
         }
     }
 
     @SubscribeEvent
     public static void serverTick(TickEvent.PlayerTickEvent e) {
-        if (e.phase == TickEvent.Phase.START && !e.player.world.isRemote && speedrunnerID != null) {
+        if (e.phase == TickEvent.Phase.START && !e.player.level.isClientSide && speedrunnerID != null) {
             BlockPos nearest;
             if (isSpeedrunner(e.player)) {
-                nearest = findNearestTrophy((ServerPlayerEntity) e.player);
+                nearest = findNearestTrophy((ServerPlayer) e.player);
             } else {
-                if (HUNTERS_BLIND.get() && e.player.world.getGameTime() % 20 == 0) {
-                    e.player.addPotionEffect(new EffectInstance(Effects.BLINDNESS, 80, 0, false, false));
+                if (HUNTERS_BLIND.get() && e.player.level.getGameTime() % 20 == 0) {
+                    e.player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 80, 0, false, false));
                 }
-                nearest = new BlockPos(e.player.getServer().getPlayerList().getPlayerByUUID(speedrunnerID).getPosition());
+                nearest = new BlockPos(e.player.getServer().getPlayerList().getPlayer(speedrunnerID).blockPosition());
             }
-            ((ServerPlayerEntity) e.player).connection.sendPacket(new SWorldSpawnChangedPacket(nearest, ((ServerPlayerEntity) e.player).getServerWorld().getSpawnAngle()));
+            ((ServerPlayer) e.player).connection.send(new ClientboundSetDefaultSpawnPositionPacket(nearest, ((ServerPlayer) e.player).getLevel().getSharedSpawnAngle()));
         }
     }
 
-    private static boolean isSpeedrunner(PlayerEntity player) {
+    private static boolean isSpeedrunner(Player player) {
         return player.getGameProfile().getId().equals(speedrunnerID);
     }
 
@@ -153,70 +152,70 @@ public class SpeedrunnerVsHunter {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
 
 
-            final long scaledTime = server.getWorld(World.OVERWORLD).getGameTime() % TIME_LIMIT;
+            final long scaledTime = server.getLevel(Level.OVERWORLD).getGameTime() % TIME_LIMIT;
             //  bossInfo.setPercent(1 - (scaledTime / (float)TIME_LIMIT));
             if (scaledTime == TIME_LIMIT - 200) {
-                final List<ServerPlayerEntity> players = server.getPlayerList().getPlayers().stream().filter(playerMP -> !(playerMP instanceof FakePlayer)).collect(Collectors.toList());
+                final List<ServerPlayer> players = server.getPlayerList().getPlayers().stream().filter(playerMP -> !(playerMP instanceof FakePlayer)).collect(Collectors.toList());
                 //if (players.size() > 1) {
-                //          server.getPlayerList().func_232641_a_(new StringTextComponent("Swapping in 10 seconds!"),ChatType.CHAT,Util.DUMMY_UUID);
+                //          server.getPlayerList().broadcastMessage(new TextComponent("Swapping in 10 seconds!"),ChatType.CHAT,Util.DUMMY_UUID);
                 //  }
             }
 
             if (scaledTime == 0 && false) {
-                List<ServerPlayerEntity> players = Lists.newArrayList(server.getPlayerList().getPlayers());
-                players.removeIf(serverPlayerEntity -> serverPlayerEntity.getGameProfile().getId().equals(speedrunnerID));
+                List<ServerPlayer> players = Lists.newArrayList(server.getPlayerList().getPlayers());
+                players.removeIf(serverPlayer -> serverPlayer.getGameProfile().getId().equals(speedrunnerID));
                 if (!players.isEmpty()) {
-                    ServerPlayerEntity newSpeedrunner = players.get(rand.nextInt(players.size()));
+                    ServerPlayer newSpeedrunner = players.get(rand.nextInt(players.size()));
                     UUID oldSpeedrunnerID = speedrunnerID;
-                    ServerPlayerEntity oldspeedrunner = server.getPlayerList().getPlayerByUUID(oldSpeedrunnerID);
+                    ServerPlayer oldspeedrunner = server.getPlayerList().getPlayer(oldSpeedrunnerID);
                     speedrunnerID = newSpeedrunner.getGameProfile().getId();
 
-                    PlayerInventory oldinventory = oldspeedrunner.inventory;
-                    for (ItemStack stack : Stream.of(oldinventory.mainInventory, oldinventory.armorInventory, oldinventory.offHandInventory).flatMap(Collection::stream).collect(Collectors.toList())) {
+                    Inventory oldinventory = oldspeedrunner.getInventory();
+                    for (ItemStack stack : Stream.of(oldinventory.items, oldinventory.armor, oldinventory.offhand).flatMap(Collection::stream).collect(Collectors.toList())) {
                         if (stack.getItem() == Items.COMPASS) {
-                            stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
+                            stack.setHoverName(new TextComponent("Hunter's Compass"));
                         }
                     }
 
-                    PlayerInventory newinventory = newSpeedrunner.inventory;
-                    for (ItemStack stack : Stream.of(newinventory.mainInventory, newinventory.armorInventory, newinventory.offHandInventory).flatMap(Collection::stream).collect(Collectors.toList())) {
+                    Inventory newinventory = newSpeedrunner.getInventory();
+                    for (ItemStack stack : Stream.of(newinventory.items, newinventory.armor, newinventory.offhand).flatMap(Collection::stream).collect(Collectors.toList())) {
                         if (stack.getItem() == Items.COMPASS) {
-                            stack.setDisplayName(new StringTextComponent("Speedrunner's Compass"));
+                            stack.setHoverName(new TextComponent("Speedrunner's Compass"));
                         }
                     }
-                    TranslationTextComponent translationTextComponent =
-                            new TranslationTextComponent("commands.speedrunnervshunter.speedrunner.success", newSpeedrunner.getDisplayName());
-                    server.getPlayerList().func_232641_a_(translationTextComponent, ChatType.CHAT, Util.DUMMY_UUID);
+                    TranslatableComponent TranslatableComponent =
+                            new TranslatableComponent("commands.speedrunnervshunter.speedrunner.success", newSpeedrunner.getDisplayName());
+                    server.getPlayerList().broadcastMessage(TranslatableComponent, ChatType.CHAT, Util.NIL_UUID);
                 }
             }
         }
     }
 
     private static void giveItems(MinecraftServer server) {
-        for (ServerPlayerEntity playerMP : server.getPlayerList().getPlayers()) {
+        for (ServerPlayer playerMP : server.getPlayerList().getPlayers()) {
             ItemStack stack = new ItemStack(Items.COMPASS);
             if (!isSpeedrunner(playerMP)) {
-                stack.setDisplayName(new StringTextComponent("Hunter's Compass"));
+                stack.setHoverName(new TextComponent("Hunter's Compass"));
             } else {
-                stack.setDisplayName(new StringTextComponent("Speedrunner's Compass"));
-                playerMP.addItemStackToInventory(new ItemStack(ModProxy.WRENCH));
+                stack.setHoverName(new TextComponent("Speedrunner's Compass"));
+                playerMP.addItem(new ItemStack(ModProxy.WRENCH));
             }
-            playerMP.addItemStackToInventory(stack);
+            playerMP.addItem(stack);
         }
     }
 
-    public static void updateStatus(ServerPlayerEntity playerEntity) {
+    public static void updateStatus(ServerPlayer playerEntity) {
         if (isSpeedrunner(playerEntity)) {
-            playerEntity.connection.sendPacket(new STitlePacket(STitlePacket.Type.ACTIONBAR, new StringTextComponent("You're the Speedrunner"), 0, TIME_LIMIT, 0));
+     //       playerEntity.connection.send(new ClientboundSetActionBarTextPacket(new TextComponent("You're the Speedrunner"), 0, TIME_LIMIT, 0));
         } else {
-            playerEntity.connection.sendPacket(new STitlePacket(STitlePacket.Type.ACTIONBAR, new StringTextComponent("You're a Hunter"), 0, TIME_LIMIT, 0));
+      //      playerEntity.connection.send(new ClientboundSetActionBarTextPacket(new TextComponent("You're a Hunter"), 0, TIME_LIMIT, 0));
         }
     }
 
     private void sneak(EntityEvent.Size e) {
         Entity entity = e.getEntity();
-        if (entity instanceof PlayerEntity && !entity.world.isRemote) {
-            PlayerEntity player = (PlayerEntity) entity;//naturaldisasters
+        if (entity instanceof Player && !entity.level.isClientSide) {
+            Player player = (Player) entity;//naturaldisasters
             if (e.getPose() == Pose.CROUCHING && isSpeedrunner(player) && ModList.get().isLoaded("naturaldisasters")) {
                 Utils.randomDisasterToHunters(player);
             }
@@ -227,8 +226,8 @@ public class SpeedrunnerVsHunter {
         if (MOBS_KNOCKBACK_10000.get()) {
             LivingEntity target = event.getEntityLiving();
             // DamageSource source = target.getLastDamageSource();
-            LivingEntity attacker = target.getRevengeTarget();
-            if (attacker instanceof MobEntity) {
+            LivingEntity attacker = target.getLastHurtByMob();
+            if (attacker instanceof Mob) {
                 event.setStrength(event.getOriginalStrength() + 5000);
             }
         }
@@ -237,7 +236,7 @@ public class SpeedrunnerVsHunter {
     private void fallDamage(LivingHurtEvent e) {
         if (FALL_DAMAGE_HEALS_SPEEDRUNNER.get()) {
             LivingEntity living = e.getEntityLiving();
-            if (e.getSource() == DamageSource.FALL && living instanceof PlayerEntity && isSpeedrunner((PlayerEntity) living)) {
+            if (e.getSource() == DamageSource.FALL && living instanceof Player && isSpeedrunner((Player) living)) {
                 living.heal(e.getAmount());
                 e.setCanceled(true);
             }
@@ -290,11 +289,11 @@ public class SpeedrunnerVsHunter {
     @SubscribeEvent
     public static void blockBreak(BlockEvent.BreakEvent event) {
         BlockPos pos = event.getPos();
-        PlayerEntity player = event.getPlayer();
+        Player player = event.getPlayer();
         for (Iterator<TrophyLocation> iterator = TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
             TrophyLocation trophyLocation = iterator.next();
             if (trophyLocation.getPos().equals(pos)) {
-                player.sendMessage(new TranslationTextComponent("text.speedrunnervshunter.trophy_get"), Util.DUMMY_UUID);
+                player.sendMessage(new TranslatableComponent("text.speedrunnervshunter.trophy_get"), Util.NIL_UUID);
                 iterator.remove();
                 handleSpecialDrops(player);
             }
@@ -305,17 +304,17 @@ public class SpeedrunnerVsHunter {
         }
     }
 
-    private static void handleSpecialDrops(PlayerEntity player) {
+    private static void handleSpecialDrops(Player player) {
         List<ItemStack> vehicles = vehicles();
         if (vehicles.size() > INDEX) {
 
             ItemStack fuelStack = new ItemStack(
-                    Registry.ITEM.getOrDefault(new ResourceLocation(ModProxy.CRAYFISH_VEHICLES, "industrial_jerry_can")));
+                    Registry.ITEM.get(new ResourceLocation(ModProxy.CRAYFISH_VEHICLES, "industrial_jerry_can")));
 
             fuelStack.getOrCreateTag().putInt("Fuel", 15000);
 
-            player.addItemStackToInventory(vehicles.get(INDEX));
-            player.addItemStackToInventory(fuelStack);
+            player.addItem(vehicles.get(INDEX));
+            player.addItem(fuelStack);
         }
         INDEX++;
     }
@@ -334,7 +333,7 @@ public class SpeedrunnerVsHunter {
 
     public static ItemStack makeCrate(String vehicle) {
         ItemStack stack = new ItemStack(ModProxy.VEHICLE_CRATE);
-        CompoundNBT tag = new CompoundNBT();
+        CompoundTag tag = new CompoundTag();
         tag.putString("Vehicle", vehicle);
         tag.putInt("WheelType", 0);
         tag.putInt("EngineTier", 0);
@@ -342,12 +341,12 @@ public class SpeedrunnerVsHunter {
         return stack;
     }
 
-    private static BlockPos findNearestTrophy(ServerPlayerEntity playerMP) {
+    private static BlockPos findNearestTrophy(ServerPlayer playerMP) {
         double dist = Double.MAX_VALUE;
         BlockPos near = null;
-        BlockPos playerPos = playerMP.getPosition();
+        BlockPos playerPos = playerMP.blockPosition();
         for (TrophyLocation pos : TROPHY_LOCATIONS) {
-            double dist1 = playerPos.distanceSq(pos.getPos());
+            double dist1 = playerPos.distSqr(pos.getPos());
             if (dist1 < dist) {
                 dist = dist1;
                 near = pos.getPos();
@@ -356,10 +355,10 @@ public class SpeedrunnerVsHunter {
         return near;
     }
 
-    private static ServerPlayerEntity getOtherPlayer(ServerPlayerEntity player) {
+    private static ServerPlayer getOtherPlayer(ServerPlayer player) {
         MinecraftServer server = player.getServer();
-        List<ServerPlayerEntity> otherPlayers = new ArrayList<>(server.getPlayerList().getPlayers());
-        otherPlayers.removeIf(serverPlayerEntity -> serverPlayerEntity.getGameProfile().getId().equals(player.getGameProfile().getId()));
+        List<ServerPlayer> otherPlayers = new ArrayList<>(server.getPlayerList().getPlayers());
+        otherPlayers.removeIf(serverPlayer -> serverPlayer.getGameProfile().getId().equals(player.getGameProfile().getId()));
         return !otherPlayers.isEmpty() ? otherPlayers.get(0) : null;
     }
 
@@ -367,7 +366,7 @@ public class SpeedrunnerVsHunter {
         //bossInfo.removeAllPlayers();
         TROPHY_LOCATIONS.clear();
         if (!abort)
-            server.getPlayerList().func_232641_a_(new TranslationTextComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT, Util.DUMMY_UUID);
+            server.getPlayerList().broadcastMessage(new TranslatableComponent("text.speedrunnervshunter.speedrunner_win"), ChatType.CHAT, Util.NIL_UUID);
         speedrunnerID = null;
         INDEX = 0;
     }

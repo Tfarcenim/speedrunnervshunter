@@ -1,6 +1,7 @@
 package tfar.speedrunnervshunter;
 
-import net.minecraft.util.math.BlockPos;
+
+import net.minecraft.core.BlockPos;
 
 public class TrophyLocation {
 
