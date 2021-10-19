@@ -28,10 +28,11 @@ public class GameManager {
     static final Random rand = new Random();
     public static boolean active;
     public static UUID speedrunnerID;
-    public static List<TrophyLocation> TROPHY_LOCATIONS = new ArrayList<>();
+    public static List<BlockPos> TROPHY_LOCATIONS = new ArrayList<>();
     public static ForgeConfigSpec.BooleanValue HUNTERS_BLIND;
     public static BlockPos activeBlock;
     static ResourceKey<Level> levelKey;
+    public static int trophyCount;
 
     public static void start(MinecraftServer server, int distance, ServerPlayer speedrunner, int count) {
 
@@ -42,6 +43,7 @@ public class GameManager {
         levelKey = speedrunner.level.dimension();
         TROPHY_LOCATIONS.clear();
         giveItems(server);
+        trophyCount = count;
         setupTrophies(server, distance, speedrunner, count);
         active = true;
     }
@@ -97,14 +99,18 @@ public class GameManager {
             double offset = i * 360d / count;
             int x = (int) (center.getX() + distance * Math.cos((Math.PI / 180) * (rot + offset)));
             int z = (int) (center.getZ() + distance * Math.sin((Math.PI / 180) * (rot + offset)));
-            TrophyLocation trophyLocation = new TrophyLocation(x, z);
+
+            int y = server.getLevel(levelKey).getChunk(x >> 4, z >> 4)
+                    .getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15) + 1;         
+            
+            BlockPos trophyLocation = new BlockPos(x,y, z);
             TROPHY_LOCATIONS.add(trophyLocation);
         }
 
 
       /*  for (TrophyLocation location : TROPHY_LOCATIONS) {
-            int y = world.getChunk(location.getPos().getX() >> 4, location.getPos().getZ() >> 4)
-                    .getHeight(Heightmap.Types.MOTION_BLOCKING, location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
+            int y = world.getChunk(location.getPos().getX() >> 4, z >> 4)
+                    .getHeight(Heightmap.Types.MOTION_BLOCKING, location.getPos().getX() & 15, z & 15) + 1;
             location.setY(y);
             world.setBlockAndUpdate(location.getPos(), Blocks.GOLD_BLOCK.defaultBlockState());
         }*/
@@ -113,13 +119,11 @@ public class GameManager {
     }
 
     public static void placeNextTrophy(MinecraftServer server) {
-        TrophyLocation location = TROPHY_LOCATIONS.get(rand.nextInt(TROPHY_LOCATIONS.size()));
+        System.out.println("trophy placed");
+        BlockPos location = TROPHY_LOCATIONS.get(rand.nextInt(TROPHY_LOCATIONS.size()));
 
-        int y = server.getLevel(levelKey).getChunk(location.getPos().getX() >> 4, location.getPos().getZ() >> 4)
-                .getHeight(Heightmap.Types.MOTION_BLOCKING, location.getPos().getX() & 15, location.getPos().getZ() & 15) + 1;
-        location.setY(y);
-        server.getLevel(levelKey).setBlockAndUpdate(location.getPos(), Blocks.GOLD_BLOCK.defaultBlockState());
+        server.getLevel(levelKey).setBlockAndUpdate(location, Blocks.GOLD_BLOCK.defaultBlockState());
 
-        activeBlock = location.getPos();
+        activeBlock = location;
     }
 }

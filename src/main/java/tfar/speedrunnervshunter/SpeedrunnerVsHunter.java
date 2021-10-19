@@ -227,25 +227,18 @@ public class SpeedrunnerVsHunter {
     public static void blockBreak(BlockEvent.BreakEvent event) {
         BlockPos pos = event.getPos();
         Player player = event.getPlayer();
-        for (Iterator<TrophyLocation> iterator = GameManager.TROPHY_LOCATIONS.iterator(); iterator.hasNext(); ) {
-            TrophyLocation trophyLocation = iterator.next();
-            if (trophyLocation.getPos().equals(pos)) {
-                player.sendMessage(new TranslatableComponent("text.speedrunnervshunter.trophy_get"), Util.NIL_UUID);
-                iterator.remove();
-                handleSpecialDrops(player);
-            }
-        }
+        Hooks.onBlockDrop(player,pos);
+    }
 
-        if (GameManager.speedrunnerID != null) {
-            if (GameManager.TROPHY_LOCATIONS.isEmpty()) {
-                GameManager.stop(player.getServer(), Resolution.WIN);
-            } else {
-                GameManager.placeNextTrophy(player.getServer());
-            }
+
+    @SubscribeEvent
+    public static void clonePlayer(PlayerEvent.Clone e) {
+        if (e.isWasDeath() && GameManager.active) {
+            e.getPlayer().getInventory().replaceWith(e.getOriginal().getInventory());
         }
     }
 
-    private static void handleSpecialDrops(Player player) {
+    static void handleSpecialDrops(Player player) {
         List<ItemStack> vehicles = vehicles();
         if (vehicles.size() > INDEX) {
 

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.4",
+  "package": "tfar.speedrunnervshunter.mixin",
+  "compatibilityLevel": "JAVA_16",
+  "refmap": "speedrunnervshunter.refmap.json",
+  "mixins": [
+    "BlockMixin",
+    "InventoryMixin"
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
